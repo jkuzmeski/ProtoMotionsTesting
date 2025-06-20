@@ -1,9 +1,10 @@
+# Make sure these imports are at the top of your file
 from abc import ABC, abstractmethod
 import os
-import shutil
 from collections import deque
 from datetime import datetime
 from typing import Dict, List, Optional
+import shutil  # <-- Add this import
 
 import torch
 from isaac_utils import torch_utils, rotations
@@ -70,9 +71,12 @@ class Simulator(ABC):
         self._user_is_recording, self._user_recording_state_change = False, False
         self._user_recording_video_queue_size = 100000
         self._delete_user_viewer_recordings = False
-        os.makedirs("output/renderings", exist_ok=True)
+        
+        # Use the directory from the config
+        self.viewer_record_dir = self.config.viewer_record_dir
+        os.makedirs(self.viewer_record_dir, exist_ok=True)
         self._user_recording_video_path = os.path.join(
-            "output/renderings", f"{self.config.experiment_name}-%s"
+            self.viewer_record_dir, f"{self.config.experiment_name}-%s"
         )
 
     # -------------------------
@@ -87,30 +91,18 @@ class Simulator(ABC):
     def get_scene_positions(self) -> List[torch.Tensor]:
         """
         Return the stored scene positions.
-
-        Returns:
-            List[torch.Tensor]: Scene positions.
         """
         return self._scene_position
 
     def get_object_dims(self) -> List[torch.Tensor]:
         """
         Return the stored object dimensions.
-
-        Returns:
-            List[torch.Tensor]: Object dimensions.
         """
         return self._object_dims
 
     def build_body_ids_tensor(self, body_names: List[str]) -> torch.Tensor:
         """
         Build a tensor of body IDs based on the provided body names.
-
-        Args:
-            body_names (List[str]): List of body names.
-
-        Returns:
-            torch.Tensor: Tensor containing indices corresponding to the body names.
         """
         body_ids: List[int] = []
         for body_name in body_names:
@@ -123,7 +115,6 @@ class Simulator(ABC):
     def on_environment_ready(self) -> None:
         """
         Configure internal tensors after the simulation environment is initialized.
-        This includes conversion tensors for bodies, DOFs, and contact sensors.
         """
         self._process_dof_props()
 
@@ -207,15 +198,7 @@ class Simulator(ABC):
 
     def step(self, common_actions: torch.Tensor, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
         """
-        Perform a simulation step by:
-          1. Converting common actions to simulator-specific actions.
-          2. Stepping the physics simulation.
-          3. Updating visualization markers.
-          4. Rendering the environment.
-
-        Args:
-            common_actions (torch.Tensor): Action tensor in common format.
-            markers_state (Dict[str, MarkerState]): Dictionary of marker states.
+        Perform a simulation step.
         """
         self.user_requested_reset = False
         common_actions = torch.clamp(common_actions * self.robot_config.control.action_scale, -self.robot_config.control.clamp_actions, self.robot_config.control.clamp_actions)
@@ -227,21 +210,12 @@ class Simulator(ABC):
     def _update_simulator_tensors_after_reset(self, env_ids: Optional[torch.Tensor]) -> None:
         """
         Update the state of the simulator for the specified environments.
-        Default implementation does nothing.
-        
-        Args:
-            new_states (Dict[str, torch.Tensor]): New state data structure.
-            env_ids (Optional[torch.Tensor]): Tensor of environment ids to update.
         """
         return
 
     def reset_envs(self, new_states: Dict[str, torch.Tensor], env_ids: Optional[torch.Tensor]) -> None:
         """
         Reset the specified environments with the given new states.
-
-        Args:
-            new_states (Dict[str, torch.Tensor]): New state data structure.
-            env_ids (Optional[torch.Tensor]): Tensor of environment ids to reset.
         """
         self.set_env_state(new_states, env_ids)
         self._update_simulator_tensors_after_reset(env_ids)
@@ -249,12 +223,6 @@ class Simulator(ABC):
     def set_env_state(self, new_states: Dict[str, torch.Tensor], env_ids: Optional[torch.Tensor]) -> None:
         """
         Set the state of the simulator for the specified environments.
-        
-        Updates positions, rotations, velocities, and DOF states according to new_states.
-
-        Args:
-            new_states (RobotState): New state data structure.
-            env_ids (Optional[torch.Tensor]): Tensor of environment ids to set.
         """
         new_states = new_states.convert_to_sim(self.data_conversion)
         self._set_simulator_env_state(new_states, env_ids)
@@ -265,12 +233,6 @@ class Simulator(ABC):
     ) -> None:
         """
         Set the simulator-specific environment state.
-        
-        Must be implemented by concrete simulator subclasses.
-
-        Args:
-            new_states (RobotState): New state data structure as a dataclass.
-            env_ids (Optional[torch.Tensor]): Tensor of environment IDs to update.
         """
         raise NotImplementedError
 
@@ -278,8 +240,6 @@ class Simulator(ABC):
     def _physics_step(self) -> None:
         """
         Advance the physics simulation by one step.
-        
-        Must be implemented in a simulator-specific manner.
         """
         raise NotImplementedError
 
@@ -289,9 +249,6 @@ class Simulator(ABC):
     def get_default_state(self) -> RobotState:
         """
         Retrieve the default state of the simulator.
-        
-        Returns:
-            RobotState: The default simulator state.
         """
         simulator_default_state: RobotState = self._get_simulator_default_state()
         simulator_default_state = simulator_default_state.convert_to_common(self.data_conversion)
@@ -312,9 +269,6 @@ class Simulator(ABC):
     def _get_simulator_default_state(self) -> RobotState:
         """
         Retrieve the default state of the simulator.
-        
-        Returns:
-            RobotState: The default simulator state.
         """
         raise NotImplementedError
 
@@ -322,22 +276,12 @@ class Simulator(ABC):
     def _get_sim_body_ordering(self) -> SimBodyOrdering:
         """
         Retrieve the ordering of bodies and DOFs as defined by the simulator.
-        
-        Returns:
-            SimBodyOrdering: A dictionary with keys 'body_names', 'dof_names',
-                                  and 'contact_sensor_body_names'.
         """
         raise NotImplementedError
 
     def get_root_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
-        Retrieve the root state of the simulator as an RobotState.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: The environment state corresponding to the robot root.
+        Retrieve the root state of the simulator as a RobotState.
         """
         simulator_root_state: RobotState = self._get_simulator_root_state(env_ids)
         simulator_root_state = simulator_root_state.convert_to_common(self.data_conversion)
@@ -346,25 +290,13 @@ class Simulator(ABC):
     @abstractmethod
     def _get_simulator_root_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
-        Retrieve the raw simulator root state as an RobotState.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: The raw environment state for the robot root.
+        Retrieve the raw simulator root state as a RobotState.
         """
         raise NotImplementedError
 
     def get_bodies_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
-        Retrieve the simulator's bodies state as an RobotState.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: An RobotState instance with rigid body state fields set.
+        Retrieve the simulator's bodies state as a RobotState.
         """
         bodies_state: RobotState = self._get_simulator_bodies_state(env_ids)
         bodies_state = bodies_state.convert_to_common(self.data_conversion)
@@ -374,24 +306,12 @@ class Simulator(ABC):
     def _get_simulator_bodies_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
         Retrieve the raw simulator bodies state.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: The raw bodies state (with rigid body fields set).
         """
         raise NotImplementedError
 
     def get_dof_forces(self, env_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Retrieve the DOF forces from the simulator.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment ids.
-        
-        Returns:
-            torch.Tensor: Tensor of DOF forces in the simulator's common ordering.
         """
         simulator_dof_forces = self._get_simulator_dof_forces(env_ids)
         return simulator_dof_forces[:, self.data_conversion.dof_convert_to_common]
@@ -405,13 +325,7 @@ class Simulator(ABC):
 
     def get_dof_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
-        Retrieve the simulator's DOF state as an RobotState.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: An RobotState instance with dof_pos and dof_vel set.
+        Retrieve the simulator's DOF state as a RobotState.
         """
         simulator_dof_state: RobotState = self._get_simulator_dof_state(env_ids)
         simulator_dof_state = simulator_dof_state.convert_to_common(self.data_conversion)
@@ -421,24 +335,12 @@ class Simulator(ABC):
     def _get_simulator_dof_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
         Retrieve the raw simulator DOF state.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: The raw DOF state containing dof_pos and dof_vel.
         """
         raise NotImplementedError
 
     def get_bodies_contact_buf(self, env_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Retrieve the bodies' contact buffer.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment ids.
-        
-        Returns:
-            torch.Tensor: Tensor containing contact forces for bodies in the common ordering.
         """
         simulator_bodies_contact_forces = self._get_simulator_bodies_contact_buf(env_ids)
         return simulator_bodies_contact_forces[:, self.data_conversion.contact_sensor_convert_to_common]
@@ -447,24 +349,12 @@ class Simulator(ABC):
     def _get_simulator_bodies_contact_buf(self, env_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Retrieve the raw simulator buffer of bodies' contact forces.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment ids.
-        
-        Returns:
-            torch.Tensor: Raw bodies contact buffer.
         """
         raise NotImplementedError
 
     def get_object_root_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
-        Retrieve the root state of objects in the simulator as an RobotState.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: The environment state corresponding to objects.
+        Retrieve the root state of objects in the simulator as a RobotState.
         """
         simulator_object_root_state: RobotState = self._get_simulator_object_root_state(env_ids)
         simulator_object_root_state = simulator_object_root_state.convert_to_common(self.data_conversion)
@@ -473,25 +363,13 @@ class Simulator(ABC):
     @abstractmethod
     def _get_simulator_object_root_state(self, env_ids: Optional[torch.Tensor] = None) -> RobotState:
         """
-        Retrieve the raw simulator object root state as an RobotState.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment IDs.
-        
-        Returns:
-            RobotState: The raw environment state for object roots.
+        Retrieve the raw simulator object root state as a RobotState.
         """
         raise NotImplementedError
 
     def get_object_contact_buf(self, env_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Retrieve object contact forces from the simulator.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment ids.
-        
-        Returns:
-            torch.Tensor: Tensor of object contact forces.
         """
         simulator_object_contact_forces = self._get_simulator_object_contact_buf(env_ids)
         return simulator_object_contact_forces
@@ -500,12 +378,6 @@ class Simulator(ABC):
     def _get_simulator_object_contact_buf(self, env_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Retrieve the raw object contact buffer.
-        
-        Args:
-            env_ids (Optional[torch.Tensor]): Optional tensor of environment ids.
-        
-        Returns:
-            torch.Tensor: Raw object contact forces.
         """
         raise NotImplementedError
 
@@ -515,12 +387,6 @@ class Simulator(ABC):
     def _action_to_pd_targets(self, action: torch.Tensor) -> torch.Tensor:
         """
         Convert a common action tensor into PD targets for simulation.
-
-        Args:
-            action (torch.Tensor): Input actions.
-        
-        Returns:
-            torch.Tensor: PD targets computed as offset + scale * action.
         """
         if self.robot_config.control.map_actions_to_pd_range:
             pd_tar = self._common_pd_action_offset + self._common_pd_action_scale * action
@@ -531,8 +397,6 @@ class Simulator(ABC):
     def _create_legged_robot_tensors(self) -> None:
         """
         Create tensors necessary for simulating legged robots.
-        
-        This sets up the PD gains, default DOF positions, and related tensors only if an initial state is defined.
         """
         if self.robot_config.init_state is None:
             return
@@ -563,11 +427,6 @@ class Simulator(ABC):
     def _process_dof_props(self) -> None:
         """
         Process DOF properties from the asset's properties.
-        
-        For non-built-in PD controllers, initialize torque limits based on provided property effort values.
-        
-        Args:
-            props (Dict[str, torch.Tensor]): Properties of DOFs from the asset.
         """
         if self.robot_config.dof_effort_limits is not None:
             self._torque_limits_common = torch.tensor(self.robot_config.dof_effort_limits, dtype=torch.float, device=self.device, requires_grad=False)
@@ -577,17 +436,8 @@ class Simulator(ABC):
     def _compute_torques(self, action: torch.Tensor) -> torch.Tensor:
         """
         Compute torques from actions.
-
-        Actions can be interpreted as position or velocity targets given to a PD controller,
-        or directly as scaled torques. The returned torques have the same dimension as the number of DOFs.
-
-        Args:
-            action (torch.Tensor): Input actions.
-        
-        Returns:
-            torch.Tensor: Computed torques clipped to the torque limits.
         """
-        common_dof_state = self._get_simulator_dof_state().convert_to_common(self.data_conversion)
+        common_dof_state = self.get_dof_state()
 
         if self.control_type == ControlType.PROPORTIONAL:
             # Map action to dof ranges.
@@ -602,10 +452,6 @@ class Simulator(ABC):
             )
         elif self.control_type == ControlType.VELOCITY:
             raise NotImplementedError("Velocity control is not properly implemented yet.")
-            torques = (
-                    self._common_p_gains * (action - dof_state.dof_vel)
-                    - self._common_d_gains * (dof_state.dof_vel - self.last_dof_vel) / self.dt
-            )
         elif self.control_type == ControlType.TORQUE:
             torques = action
         else:
@@ -618,8 +464,6 @@ class Simulator(ABC):
     def _toggle_camera_target(self) -> None:
         """
         Toggle the camera target between different environments and objects.
-        
-        The target cycles through all objects in the scene, with 0 referring to the environment.
         """
         if self.scene_lib is not None:
             self._camera_target["element"] = (self._camera_target["element"] + 1) % (self._num_objects_per_scene + 1)
@@ -628,7 +472,6 @@ class Simulator(ABC):
         if self._camera_target["element"] == 0:
             self._camera_target["env"] = (self._camera_target["env"] + 1) % self.num_envs
             print("Updated camera target to env", self._camera_target["env"])
-
     
     @abstractmethod
     def _write_viewport_to_file(self, file_name: str) -> None:
@@ -641,8 +484,6 @@ class Simulator(ABC):
     def _init_camera(self) -> None:
         """
         Initialize the camera for visualization.
-        
-        Must be implemented in a simulator-specific manner.
         """
         raise NotImplementedError
     
@@ -670,11 +511,6 @@ class Simulator(ABC):
     def _update_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
         """
         Update visualization markers for the simulator.
-
-        Converts marker orientations if necessary and delegates to the simulator-specific update.
-        
-        Args:
-            markers_state (Dict[str, MarkerState]): Dictionary containing marker states.
         """
         if not markers_state:
             return
@@ -684,13 +520,10 @@ class Simulator(ABC):
                 markers_state[key].orientation = rotations.xyzw_to_wxyz(markers_state[key].orientation)
         self._update_simulator_markers(markers_state)
 
-
+    @abstractmethod
     def _update_simulator_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
         """
         Simulator-specific update of marker states.
-        
-        Args:
-            markers_state (Dict[str, MarkerState]): Dictionary containing marker states.
         """
         raise NotImplementedError
 
@@ -698,21 +531,12 @@ class Simulator(ABC):
     def close(self) -> None:
         """
         Close the simulator and perform cleanup operations.
-        
-        Must be implemented in a simulator-specific manner.
         """
         raise NotImplementedError
-
 
     def render(self):
         """
         Render the current simulation state and handle video recording if enabled.
-        
-        This method manages:
-        1. Video recording state transitions and initialization
-        2. Frame capture and saving during recording
-        3. Video compilation when recording ends
-        4. Cleanup of temporary image files
         """
         if self.config.record_viewer:
             # Handle recording state transitions
@@ -795,5 +619,3 @@ class Simulator(ABC):
                     shutil.rmtree(self._curr_user_recording_name)
                 self._delete_user_viewer_recordings = False
                 self._recorded_motion = None
-
-# --- IMPORTANT: Make sure the old `render` function at the very end of the file is DELETED ---
