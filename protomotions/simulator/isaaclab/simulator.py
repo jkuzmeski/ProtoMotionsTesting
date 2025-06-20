@@ -814,3 +814,13 @@ class IsaacLabSimulator(Simulator):
                 orientations=markers_state_item.orientation.view(-1, 4),
                 scales=marker_dict.scale,
             )
+
+    def _start_video_record(self):
+        """Starts video recording if not already recording."""
+        if not self._user_is_recording:
+            self._toggle_video_record()
+
+    def _stop_video_record(self):
+        """Stops video recording if currently recording."""
+        if self._user_is_recording:
+            self._toggle_video_record()
