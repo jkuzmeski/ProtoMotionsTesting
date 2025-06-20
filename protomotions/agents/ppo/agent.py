@@ -327,6 +327,13 @@ class PPO:
             # Save model checkpoint at specified intervals before evaluation.
             if self.current_epoch % self.config.manual_save_every == 0:
                 self.save()
+                
+            if (
+                self.config.simulator.config.get("record_video_every") is not None
+                and self.current_epoch % self.config.simulator.config.record_video_every == 0
+            ):
+                self.env.simulator._stop_video_record()
+                self.env.simulator._start_video_record()
 
             if (
                 self.config.eval_metrics_every is not None

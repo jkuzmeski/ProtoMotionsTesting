@@ -93,6 +93,9 @@ def main(override_config: OmegaConf):
     agent.load(config.checkpoint)
 
     agent.evaluate_policy()
+    
+    if config.simulator.config.record_video_on_eval:
+        agent.env.simulator._stop_video_record()
 
 
 if __name__ == "__main__":

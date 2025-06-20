@@ -121,8 +121,13 @@ def main(config: OmegaConf):
 
     agent.fabric.strategy.barrier()
 
+    if config.simulator.config.record_viewer:
+        agent.env.simulator._start_video_record()
+
     agent.fit()
 
+    if config.simulator.config.record_viewer:
+        agent.env.simulator._stop_video_record()
 
 if __name__ == "__main__":
     main()
