@@ -628,69 +628,7 @@ class Simulator(ABC):
             self._camera_target["env"] = (self._camera_target["env"] + 1) % self.num_envs
             print("Updated camera target to env", self._camera_target["env"])
 
-    
-    @abstractmethod
-    def _write_viewport_to_file(self, file_name: str) -> None:
-        """
-        Write the current viewport to a file.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _init_camera(self) -> None:
-        """
-        Initialize the camera for visualization.
-        
-        Must be implemented in a simulator-specific manner.
-        """
-        raise NotImplementedError
-    
-    def _toggle_video_record(self):
-        self._user_is_recording = not self._user_is_recording
-        self._user_recording_state_change = True
-
-    def _cancel_video_record(self):
-        self._user_is_recording = False
-        self._user_recording_state_change = False
-        self._delete_user_viewer_recordings = True
-
-
-    def _update_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
-        """
-        Update visualization markers for the simulator.
-
-        Converts marker orientations if necessary and delegates to the simulator-specific update.
-        
-        Args:
-            markers_state (Dict[str, MarkerState]): Dictionary containing marker states.
-        """
-        if not markers_state:
-            return
-
-        if not self.config.w_last:
-            for key in markers_state.keys():
-                markers_state[key].orientation = rotations.xyzw_to_wxyz(markers_state[key].orientation)
-        self._update_simulator_markers(markers_state)
-
-    @abstractmethod
-    def _update_simulator_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
-        """
-        Simulator-specific update of marker states.
-        
-        Args:
-            markers_state (Dict[str, MarkerState]): Dictionary containing marker states.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def close(self) -> None:
-        """
-        Close the simulator and perform cleanup operations.
-        
-        Must be implemented in a simulator-specific manner.
-        """
-        raise NotImplementedError
-def render(self):
+    def render(self):
         """
         Render the current simulation state and handle video recording if enabled.
         
@@ -784,3 +722,65 @@ def render(self):
                 os.removedirs(self._curr_user_recording_name)
                 self._delete_user_viewer_recordings = False
                 self._recorded_motion = None
+
+    @abstractmethod
+    def _write_viewport_to_file(self, file_name: str) -> None:
+        """
+        Write the current viewport to a file.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _init_camera(self) -> None:
+        """
+        Initialize the camera for visualization.
+        
+        Must be implemented in a simulator-specific manner.
+        """
+        raise NotImplementedError
+    
+    def _toggle_video_record(self):
+        self._user_is_recording = not self._user_is_recording
+        self._user_recording_state_change = True
+
+    def _cancel_video_record(self):
+        self._user_is_recording = False
+        self._user_recording_state_change = False
+        self._delete_user_viewer_recordings = True
+
+
+    def _update_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
+        """
+        Update visualization markers for the simulator.
+
+        Converts marker orientations if necessary and delegates to the simulator-specific update.
+        
+        Args:
+            markers_state (Dict[str, MarkerState]): Dictionary containing marker states.
+        """
+        if not markers_state:
+            return
+
+        if not self.config.w_last:
+            for key in markers_state.keys():
+                markers_state[key].orientation = rotations.xyzw_to_wxyz(markers_state[key].orientation)
+        self._update_simulator_markers(markers_state)
+
+    @abstractmethod
+    def _update_simulator_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
+        """
+        Simulator-specific update of marker states.
+        
+        Args:
+            markers_state (Dict[str, MarkerState]): Dictionary containing marker states.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        """
+        Close the simulator and perform cleanup operations.
+        
+        Must be implemented in a simulator-specific manner.
+        """
+        raise NotImplementedError
