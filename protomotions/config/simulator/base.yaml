@@ -1,5 +1,3 @@
-# protomotions/config/simulator/base.yaml
-
 # @package _global_
 
 simulator:
@@ -11,21 +9,16 @@ simulator:
     headless: ${headless}
     robot: ${robot}
     num_envs: ${num_envs}
-
     plane:
       static_friction: 1.0
       dynamic_friction: 1.0
       restitution: 0.0
-
     sim:
       fps: ???
       decimation: ???
 
-    # --- Video Recording Parameters ---
-    record_viewer: True # Master switch to enable/disable recording
-    record_video_every: 10 # Set to an integer (e.g., 10) to record every N epochs
-    record_video_on_eval: True # Record video on every evaluation run
-    viewer_record_dir: "output/recordings/viewer"
-    # --- End Video Recording Parameters ---
+    camera: null
 
+    record_viewer: False
+    viewer_record_dir: "output/recordings/viewer"
     experiment_name: ${experiment_name}

@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import os
-import shutil
 from collections import deque
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -647,25 +646,14 @@ class Simulator(ABC):
         raise NotImplementedError
     
     def _toggle_video_record(self):
-        """Toggles video recording on or off."""
         self._user_is_recording = not self._user_is_recording
         self._user_recording_state_change = True
 
-    def _start_video_record(self):
-        """Starts video recording if not already recording."""
-        if not self._user_is_recording:
-            self._toggle_video_record()
-
-    def _stop_video_record(self):
-        """Stops video recording if currently recording."""
-        if self._user_is_recording:
-            self._toggle_video_record()
-
     def _cancel_video_record(self):
-        """Cancels the current recording and flags frames for deletion."""
         self._user_is_recording = False
         self._user_recording_state_change = False
         self._delete_user_viewer_recordings = True
+
 
     def _update_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
         """
@@ -684,7 +672,7 @@ class Simulator(ABC):
                 markers_state[key].orientation = rotations.xyzw_to_wxyz(markers_state[key].orientation)
         self._update_simulator_markers(markers_state)
 
-
+    @abstractmethod
     def _update_simulator_markers(self, markers_state: Optional[Dict[str, MarkerState]] = None) -> None:
         """
         Simulator-specific update of marker states.
@@ -702,9 +690,7 @@ class Simulator(ABC):
         Must be implemented in a simulator-specific manner.
         """
         raise NotImplementedError
-
-
-    def render(self):
+def render(self):
         """
         Render the current simulation state and handle video recording if enabled.
         
@@ -714,7 +700,7 @@ class Simulator(ABC):
         3. Video compilation when recording ends
         4. Cleanup of temporary image files
         """
-        if self.config.record_viewer:
+        if not self.headless:
             # Handle recording state transitions
             if self._user_recording_state_change:
                 if self._user_is_recording:
@@ -745,32 +731,30 @@ class Simulator(ABC):
                         if f.endswith('.png')
                     ])
 
-                    if images:
-                        clip = ImageSequenceClip(images, fps=30)
-                        clip.write_videofile(
-                            f"{self._curr_user_recording_name}.mp4",
-                            codec='libx264',
-                            audio=False,
-                            threads=32,
-                            preset='veryfast',
-                            ffmpeg_params=[
-                                '-profile:v', 'main',
-                                '-level', '4.0',
-                                '-pix_fmt', 'yuv420p', 
-                                '-movflags', '+faststart',
-                                '-crf', '23',
-                                '-x264-params', 'keyint=60:min-keyint=30'
-                            ]
-                        )
-                        self._delete_user_viewer_recordings = True
-                        print(f"Video saved to {self._curr_user_recording_name}.mp4")
+                    clip = ImageSequenceClip(images, fps=30)
+                    clip.write_videofile(
+                        f"{self._curr_user_recording_name}.mp4",
+                        codec='libx264',
+                        audio=False,
+                        threads=32,
+                        preset='veryfast',
+                        ffmpeg_params=[
+                            '-profile:v', 'main',
+                            '-level', '4.0',
+                            '-pix_fmt', 'yuv420p', 
+                            '-movflags', '+faststart',
+                            '-crf', '23',
+                            '-x264-params', 'keyint=60:min-keyint=30'
+                        ]
+                    )
+                    self._delete_user_viewer_recordings = True
+                    print(f"Video saved to {self._curr_user_recording_name}.mp4")
                     
                     # Save the recorded motion to a file
-                    if self._recorded_motion and self._recorded_motion["global_translation"]:
-                        global_translation = torch.cat(self._recorded_motion["global_translation"], dim=0)
-                        global_rotation = torch.cat(self._recorded_motion["global_rotation"], dim=0)
-                        with open(f"{self._curr_user_recording_name}.pt", "wb") as f:
-                            torch.save({"global_translation": global_translation, "global_rotation": global_rotation}, f)
+                    global_translation = torch.cat(self._recorded_motion["global_translation"], dim=0)
+                    global_rotation = torch.cat(self._recorded_motion["global_rotation"], dim=0)
+                    with open(f"{self._curr_user_recording_name}.pt", "wb") as f:
+                        torch.save({"global_translation": global_translation, "global_rotation": global_rotation}, f)
                     self._recorded_motion = None
                     
                 self._user_recording_state_change = False
@@ -784,16 +768,19 @@ class Simulator(ABC):
                 self._write_viewport_to_file(file_name)
                 self._user_recording_frame += 1
                 
-                if self._recorded_motion:
-                    bodies_state = self.get_bodies_state()
-                    self._recorded_motion["global_translation"].append(bodies_state.rigid_body_pos)
-                    self._recorded_motion["global_rotation"].append(bodies_state.rigid_body_rot)
+                bodies_state = self.get_bodies_state()
+                self._recorded_motion["global_translation"].append(bodies_state.rigid_body_pos)
+                self._recorded_motion["global_rotation"].append(bodies_state.rigid_body_rot)
 
             # Clean up temporary files if needed
             if self._delete_user_viewer_recordings:
-                if os.path.exists(self._curr_user_recording_name):
-                    shutil.rmtree(self._curr_user_recording_name)
+                images = [
+                    img 
+                    for img in os.listdir(self._curr_user_recording_name)
+                    if img.endswith(".png")
+                ]
+                for image in images:
+                    os.remove(os.path.join(self._curr_user_recording_name, image))
+                os.removedirs(self._curr_user_recording_name)
                 self._delete_user_viewer_recordings = False
                 self._recorded_motion = None
-
-# --- IMPORTANT: Make sure the old `render` function at the very end of the file is DELETED ---

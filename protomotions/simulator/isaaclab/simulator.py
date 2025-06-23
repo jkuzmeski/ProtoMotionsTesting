@@ -627,15 +627,11 @@ class IsaacLabSimulator(Simulator):
     # =====================================================
     # Group 6: Rendering & Visualization
     # =====================================================
-    
-    
     def render(self) -> None:
         """
-        Render the simulation view. Initializes or updates the camera if the simulator is not in headless mode
-        OR if video recording is enabled.
+        Render the simulation view. Initializes or updates the camera if the simulator is not in headless mode.
         """
-        # This condition allows the viewport to be prepared for recording even in headless mode.
-        if not self.headless or self.config.record_viewer:
+        if not self.headless:
             if not hasattr(self, "_perspective_view"):
                 from protomotions.simulator.isaaclab.utils.perspective_viewer import (
                     PerspectiveViewer,
@@ -645,9 +641,6 @@ class IsaacLabSimulator(Simulator):
                 self._init_camera()
             else:
                 self._update_camera()
-        
-        # This calls the base class render() method, which now contains all our video capture logic.
-        # That logic is independently checked by `if self.config.record_viewer`, so this is safe.
         super().render()
 
     def _init_camera(self) -> None:
@@ -814,13 +807,3 @@ class IsaacLabSimulator(Simulator):
                 orientations=markers_state_item.orientation.view(-1, 4),
                 scales=marker_dict.scale,
             )
-
-    def _start_video_record(self):
-        """Starts video recording if not already recording."""
-        if not self._user_is_recording:
-            self._toggle_video_record()
-
-    def _stop_video_record(self):
-        """Stops video recording if currently recording."""
-        if self._user_is_recording:
-            self._toggle_video_record()

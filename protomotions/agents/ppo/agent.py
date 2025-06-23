@@ -327,13 +327,6 @@ class PPO:
             # Save model checkpoint at specified intervals before evaluation.
             if self.current_epoch % self.config.manual_save_every == 0:
                 self.save()
-                
-            if (
-                self.config.simulator.config.get("record_video_every") is not None
-                and self.current_epoch % self.config.simulator.config.record_video_every == 0
-            ):
-                self.env.simulator._stop_video_record()
-                self.env.simulator._start_video_record()
 
             if (
                 self.config.eval_metrics_every is not None
@@ -566,35 +559,18 @@ class PPO:
 
     @torch.no_grad()
     def evaluate_policy(self):
-        self.set_eval()
-        collected_data = []
-
-        for episode_num in range(self.cfg.evaluation.num_eval_episodes):
-            print(f"Running evaluation episode {episode_num + 1}/{self.cfg.evaluation.num_eval_episodes}")
-            obs, _ = self.env.reset()
-            terminated = torch.zeros(
-                self.env.num_envs, 1, dtype=torch.bool, device=self.device
-            )
-            episode_data = []
-            while not torch.all(terminated):
-                with torch.no_grad():
-                    actions = self.get_actions(obs)
-                obs, _, terminated, _, _ = self.env.step(actions)
-
-                # Collect data from the simulator
-                sim_data = self.env.simulator.get_simulation_data()
-                episode_data.append(sim_data)
-
-            collected_data.append(episode_data)
-
-        # Save the collected data
-        import pickle
-        import time
-
-        output_filename = f"evaluation_data_{time.strftime('%Y%m%d-%H%M%S')}.pkl"
-        print(f"Saving collected data to {output_filename}")
-        with open(output_filename, "wb") as f:
-            pickle.dump(collected_data, f)
+        self.eval()
+        done_indices = None  # Force reset on first entry
+        step = 0
+        while self.config.max_eval_steps is None or step < self.config.max_eval_steps:
+            obs = self.handle_reset(done_indices)
+            # Obtain actor predictions
+            actions = self.model.act(obs)
+            # Step the environment
+            obs, rewards, dones, terminated, extras = self.env_step(actions)
+            all_done_indices = dones.nonzero(as_tuple=False)
+            done_indices = all_done_indices.squeeze(-1)
+            step += 1
 
     def post_epoch_logging(self, training_log_dict: Dict):
         end_time = time.time()

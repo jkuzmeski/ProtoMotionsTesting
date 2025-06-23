@@ -301,7 +301,7 @@ class SimulatorConfig(ConfigBuilder):
     experiment_name: str
     plane: PlaneConfig = PlaneConfig()
     camera: Optional[Any] = None
-    record_viewer: bool = False  # Add this line
+    record_viewer: bool = False
     viewer_record_dir: str = "output/recordings/viewer"
 
 

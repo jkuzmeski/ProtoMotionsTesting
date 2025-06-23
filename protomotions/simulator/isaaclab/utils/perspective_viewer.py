@@ -1,35 +1,44 @@
 import carb
 import numpy as np
 from pxr import Gf, Sdf
+import omni.replicator.core as rep
+
 
 class PerspectiveViewer(object):
     def __init__(self):
         self.viewport_api = None
         self.get_viewport_api()
+        rp = rep.create.render_product("/OmniverseKit_Persp", resolution=(500, 500))  # Lower resolution
         
-        # Only try to change render settings if we successfully found a viewport
-        if self.viewport_api:
-            self.disable_advanced_rendering()
+        # Disable advanced rendering features
+        self.disable_advanced_rendering()
 
     def disable_advanced_rendering(self):
-        # A check to prevent crashing if the viewport is not available
-        if not self.viewport_api:
-            return
-            
         stage = self.viewport_api.stage
         render_settings_path = "/Render/RenderProduct/RenderSettings"
         
+        # Create or get the RenderSettings prim
         render_settings = stage.GetPrimAtPath(render_settings_path)
         if not render_settings.IsValid():
             render_settings = stage.DefinePrim(render_settings_path, "RenderSettings")
 
+        # Disable ray tracing
         render_settings.CreateAttribute("rtx:raytracing:enabled", Sdf.ValueTypeNames.Bool).Set(False)
+
+        # Disable Global Illumination
         render_settings.CreateAttribute("rtx:pathtracing:gi:enabled", Sdf.ValueTypeNames.Bool).Set(False)
+
+        # Disable Ambient Occlusion
         render_settings.CreateAttribute("rtx:ambientOcclusion:enabled", Sdf.ValueTypeNames.Bool).Set(False)
+
+        # Disable Depth of Field
         render_settings.CreateAttribute("rtx:dof:enabled", Sdf.ValueTypeNames.Bool).Set(False)
+
+        # Optionally, you can also reduce other quality settings
         render_settings.CreateAttribute("rtx:pathtracing:maxBounces", Sdf.ValueTypeNames.Int).Set(1)
         render_settings.CreateAttribute("rtx:pathtracing:maxSamples", Sdf.ValueTypeNames.Int).Set(16)
 
+        # Apply the changes
         stage.SetEditTarget(stage.GetSessionLayer())
 
 
@@ -37,6 +46,7 @@ class PerspectiveViewer(object):
         if self.viewport_api is None:
             try:
                 from omni.kit.viewport.utility import get_active_viewport
+
                 self.viewport_api = get_active_viewport()
             except ImportError:
                 carb.log_warn(
@@ -44,14 +54,10 @@ class PerspectiveViewer(object):
                 )
 
             if self.viewport_api is None:
-                carb.log_warn("Could not get active viewport. Camera view settings will be unavailable.")
+                carb.log_warn("could not get active viewport, cannot set camera view")
 
     def get_camera_state(self):
         self.get_viewport_api()
-        
-        # Return a default value if the viewport is not available
-        if not self.viewport_api:
-            return 0.0, 0.0, 0.0
 
         from omni.kit.viewport.utility.camera_state import ViewportCameraState
 
@@ -71,10 +77,6 @@ class PerspectiveViewer(object):
 
     def set_camera_view(self, eye: np.array, target: np.array):
         self.get_viewport_api()
-        
-        # Do nothing if the viewport is not available
-        if not self.viewport_api:
-            return
 
         from omni.kit.viewport.utility.camera_state import ViewportCameraState
 
